@@ -1,0 +1,108 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0E6B5C"><title>Mi Wallet · Añadir</title>
+<style>
+:root{--bg:#F4F6F6;--fg:#132120;--muted:#62716F;--card:#fff;--accent:#0E6B5C;--exp:#C4432F;--inc:#12805E}
+@media (prefers-color-scheme:dark){:root{--bg:#0C1312;--fg:#E7EFEE;--muted:#97A7A5;--card:#141D1C;--accent:#4CC3A6;--exp:#F07C66;--inc:#4CC38A;color-scheme:dark}}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:15px system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px;box-sizing:border-box}
+.c{background:var(--card);border-radius:20px;padding:24px;max-width:360px;width:100%;text-align:center;display:flex;flex-direction:column;gap:6px}
+.ok{width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:26px;margin:0 auto 8px}
+.ok.bad{background:var(--exp)}
+b.a{font-size:30px;font-weight:800;letter-spacing:-.02em}
+.m{color:var(--muted)}
+a{color:var(--accent);font-weight:600;margin-top:10px}
+</style></head><body><div class="c" id="c"><p class="m">Procesando…</p></div>
+<script>
+(function(){
+"use strict";
+var LS="miwallet.v2";
+var p=new URLSearchParams(location.search);
+var raw=(p.get("t")||"").trim();               // texto completo de la notificación
+var amtP=p.get("importe")||p.get("amount")||"";  // o importe y comercio por separado
+var merP=(p.get("comercio")||p.get("merchant")||"").trim();
+var typeP=(p.get("tipo")||"").toLowerCase();
+var accP=(p.get("cuenta")||"").toLowerCase();
+var text=(raw+" "+amtP+" "+merP).trim();
+
+function pad(n){return String(n).padStart(2,"0")}
+var now=new Date();
+var date=now.getFullYear()+"-"+pad(now.getMonth()+1)+"-"+pad(now.getDate());
+
+/* --- Importe --- */
+function parseAmount(s){
+  if(!s)return 0;
+  var m=s.match(/(-?\d{1,3}(?:[.\s]\d{3})*(?:,\d{1,2})|-?\d+(?:[.,]\d{1,2})?)\s*(?:€|eur|euros)/i)||s.match(/(?:€|eur)\s*(-?\d+(?:[.,]\d{1,2})?)/i)||s.match(/(-?\d+(?:[.,]\d{1,2})?)/);
+  if(!m)return 0;
+  var n=m[1].replace(/\s/g,"");
+  if(/,\d{1,2}$/.test(n))n=n.replace(/\./g,"").replace(",",".");
+  else if(/\.\d{3}$/.test(n))n=n.replace(/\./g,"");
+  return Math.abs(Math.round(parseFloat(n)*100)/100)||0;
+}
+var amount=parseAmount(amtP)||parseAmount(raw);
+
+/* --- Tipo: gasto o ingreso --- */
+var INC_RE=/(recibid|ingreso|has cobrado|abono|n[oó]mina|devoluci[oó]n|reembolso|te han enviado|te ha enviado|transferencia entrante)/i;
+var type=typeP==="ingreso"?"ingreso":typeP==="gasto"?"gasto":(INC_RE.test(raw)?"ingreso":"gasto");
+
+/* --- Comercio --- */
+function merchant(){
+  if(merP)return merP;
+  var s=raw.replace(/\s+/g," ");
+  var m=s.match(/\ben\s+(.+?)(?:\s+(?:con|el|por|desde|tarjeta|card)\b|[.;]\s|,\s|\s+\d|$)/i)
+     ||s.match(/\b(?:a|de)\s+([A-ZÁÉÍÓÚÑ][^.,;]{1,30}?)(?:\s+(?:con|por)\b|[.;,]|$)/);
+  var r=m?m[1]:"";
+  if(!r){var m2=s.match(/(?:€|eur|euros)\s+(?!en\b)([A-Za-zÁÉÍÓÚÑ][^.,;]{1,30})/i);if(m2)r=m2[1]}
+  if(!r)r=s.replace(/-?\d[\d.,]*\s*(?:€|eur|euros)?/gi,"").replace(/\s+/g," ").trim();
+  if(/bizum/i.test(s))r="Bizum"+(r?" · "+r:"");
+  return r.replace(/\*+/g," ").trim().slice(0,40);
+}
+var note=merchant();
+
+/* --- Categoría automática --- */
+var RULES=[
+ ["suscripciones",/spotify|netflix|hbo|\bmax\b|disney|prime video|amazon prime|apple\.com|icloud|youtube|google one|game pass|ps plus|playstation plus|chatgpt|openai|anthropic|claude|digi\b|movistar|vodafone|orange|simyo|lowi|o2\b|patreon|twitch/i],
+ ["tecnologia",/media ?markt|pccomponentes|apple store|xiaomi|fnac|back ?market|worten|coolmod|samsung/i],
+ ["transporte",/renfe|tmb|fgc|rodalies|t-?jove|t-?usual|metro|\bbus\b|autob|cabify|\buber\b(?! ?eats)|bolt|repsol|cepsa|\bbp\b|galp|shell|petronor|gasolin|parking|aparcamiento|taxi|bicing|blablacar|ryanair|vueling/i],
+ ["comida",/mercadona|lidl|carrefour|\bdia\b|aldi|consum|bon ?preu|condis|caprabo|eroski|alcampo|esclat|supermerc|mcdonald|burger|kfc|telepizza|domino|glovo|just ?eat|uber ?eats|restaur|\bbar\b|caf[eé]|starbucks|montaditos|kebab|pizz|bocad|panader|forn\b|tapas|sushi|frankfurt/i],
+ ["salud",/farmac|gym|gimnas|basic-?fit|altafit|\bdir\b|fitness|clinic|dent|[oó]ptica|fisio/i],
+ ["ocio",/cine|cinesa|yelmo|steam|epic games|playstation store|nintendo|xbox|ticketmaster|entradas|bolera|discoteca|concierto|escape|museo|parque/i],
+ ["compras",/amazon|zara|pull ?& ?bear|bershka|primark|shein|aliexpress|temu|decathlon|h ?& ?m|corte ingl|ikea|action|vinted|wallapop|nike|adidas|jd sports|foot ?locker|sprinter|druni|sephora|primor/i]
+];
+var INC_RULES=[["trabajo",/n[oó]mina|salario|sueldo/i],["ventas",/wallapop|vinted|venta/i],["regalos",/regalo|cumple/i],["paga",/paga\b|bizum/i]];
+function category(){
+  var s=raw+" "+note;
+  var rules=type==="ingreso"?INC_RULES:RULES;
+  for(var i=0;i<rules.length;i++)if(rules[i][1].test(s))return rules[i][0];
+  return type==="ingreso"?"otros_i":"otros_g";
+}
+var cat=p.get("categoria")||category();
+
+/* --- Guardar en la app --- */
+function load(){try{return JSON.parse(localStorage.getItem(LS)||"null")}catch(e){return null}}
+function def(){return{accounts:[{id:"efectivo",name:"Efectivo",initial:0,col:1},{id:"banco",name:"Banco",initial:0,col:2},{id:"bizum",name:"Bizum",initial:0,col:5}],budget:{total:0,cats:{}},customCats:[],recurring:[],goals:[]}}
+function hash(s){var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h>>>0).toString(36)}
+
+var box=document.getElementById("c");
+function show(ok,html){box.innerHTML='<div class="ok'+(ok?"":" bad")+'">'+(ok?"✓":"!")+'</div>'+html+'<a href="./">Abrir Mi Wallet</a>'}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+
+if(!amount){show(false,'<b>No he encontrado un importe</b><p class="m">Texto recibido: '+esc(text||"(vacío)")+'</p>');return}
+
+var d=load();if(!d||!d.state)d={state:def(),tx:[]};
+var accs=d.state.accounts||[];
+var acc=(accs.find(function(a){return a.id===accP||a.name.toLowerCase()===accP})||accs.find(function(a){return a.id==="banco"})||accs[0]||{id:"banco"}).id;
+if(/bizum/i.test(raw)){var bz=accs.find(function(a){return a.id==="bizum"});if(bz&&!accP)acc=bz.id}
+var minute=now.toISOString().slice(0,16);
+var id="n-"+hash(text+"|"+minute);
+var dup=d.tx.some(function(t){return t.id===id});
+if(!dup){
+  d.tx.push({id:id,type:type,amount:amount,cat:cat,acc:acc,date:date,note:note,ts:now.getTime(),auto:true});
+  try{localStorage.setItem(LS,JSON.stringify(d))}catch(e){show(false,"<b>No se ha podido guardar</b>");return}
+}
+var labels={comida:"Comida",transporte:"Transporte",ocio:"Ocio",compras:"Compras",tecnologia:"Tecnología",suscripciones:"Suscripciones",salud:"Salud y gym",otros_g:"Otros gastos",paga:"Paga",trabajo:"Trabajo",ventas:"Ventas",regalos:"Regalos",otros_i:"Otros ingresos"};
+var custom=(d.state.customCats||[]).find(function(c){return c.id===cat});
+var eur=new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(amount);
+show(true,'<b class="a" style="color:var('+(type==="ingreso"?"--inc":"--exp")+')">'+(type==="ingreso"?"+":"−")+eur+'</b><div>'+esc(note||"Movimiento")+'</div><div class="m">'+esc(custom?custom.label:(labels[cat]||cat))+' · '+(dup?"ya estaba apuntado":"apuntado")+'</div>');
+if(p.get("volver")!=="0")setTimeout(function(){location.replace("./")},1800);
+})();
+</script></body></html>
